@@ -1,0 +1,199 @@
+package com.example.butlermanager.ui
+
+import android.Manifest
+import android.content.pm.PackageManager
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.UseCaseGroup
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
+import androidx.navigation.NavController
+import androidx.navigation.compose.rememberNavController
+import com.example.butlermanager.data.QrData
+import com.google.gson.Gson
+import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.common.InputImage
+import java.util.concurrent.Executors
+
+private const val TAG = "QrScannerScreen"
+
+@androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
+@Composable
+fun QrScannerScreen(navController: NavController) {
+    Log.d(TAG, "QrScannerScreen composable started")
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val cameraProviderFuture = remember {
+        Log.d(TAG, "Getting camera provider instance")
+        ProcessCameraProvider.getInstance(context)
+    }
+
+    var hasCameraPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.CAMERA
+            ) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { granted ->
+            Log.d(TAG, "Camera permission granted: $granted")
+            hasCameraPermission = granted
+        }
+    )
+
+    LaunchedEffect(key1 = true) {
+        Log.d(TAG, "Checking camera permission. Has permission: $hasCameraPermission")
+        if (!hasCameraPermission) {
+            Log.d(TAG, "Requesting camera permission")
+            launcher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        if (hasCameraPermission) {
+            Log.d(TAG, "Camera permission is granted, showing camera preview.")
+            Box(
+                modifier = Modifier
+                    .size(240.dp, 240.dp)
+                    .clip(RoundedCornerShape(16.dp))
+            ) {
+                AndroidView(
+                    factory = { ctx ->
+                        Log.d(TAG, "AndroidView factory called")
+                        val previewView = PreviewView(ctx).apply {
+                            this.scaleType = PreviewView.ScaleType.FILL_CENTER
+                            this.implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                        }
+                        val cameraExecutor = Executors.newSingleThreadExecutor()
+
+                        cameraProviderFuture.addListener({
+                            Log.d(TAG, "cameraProviderFuture listener triggered")
+                            val cameraProvider = cameraProviderFuture.get()
+                            val preview = androidx.camera.core.Preview.Builder().build().also {
+                                it.setSurfaceProvider(previewView.surfaceProvider)
+                            }
+
+                            val imageAnalysis = ImageAnalysis.Builder()
+                                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                                .build()
+
+                            imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
+                                val image = imageProxy.image
+                                if (image != null) {
+                                    val inputImage = InputImage.fromMediaImage(image, imageProxy.imageInfo.rotationDegrees)
+                                    val scanner = BarcodeScanning.getClient()
+                                    scanner.process(inputImage)
+                                        .addOnSuccessListener { barcodes ->
+                                            if (barcodes.isNotEmpty()) {
+                                                barcodes.first().rawValue?.let { rawValue ->
+                                                    Log.d(TAG, "QR Code detected: $rawValue")
+                                                    try {
+                                                        val qrData = Gson().fromJson(rawValue, QrData::class.java)
+                                                        Log.d(TAG, "Parsed QR data: $qrData")
+                                                        imageAnalysis.clearAnalyzer()
+                                                        cameraProvider.unbindAll()
+                                                        Log.d(TAG, "Navigating to connectProgress screen")
+                                                        navController.navigate("connectProgress/${qrData.name}/${qrData.password}")
+                                                    } catch (e: Exception) {
+                                                        Log.e(TAG, "Error parsing QR code JSON", e)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        .addOnFailureListener { e -> Log.e(TAG, "Barcode scanning failed", e) }
+                                        .addOnCompleteListener { imageProxy.close() }
+                                } else {
+                                    imageProxy.close()
+                                }
+                            }
+
+                            val selector = CameraSelector.Builder()
+                                .requireLensFacing(CameraSelector.LENS_FACING_BACK)
+                                .build()
+
+                            previewView.post {
+                                Log.d(TAG, "Setting up camera use cases")
+                                val useCaseGroup = UseCaseGroup.Builder()
+                                    .addUseCase(preview)
+                                    .addUseCase(imageAnalysis)
+                                    .build()
+                                try {
+                                    cameraProvider.unbindAll()
+                                    val camera = cameraProvider.bindToLifecycle(
+                                        lifecycleOwner,
+                                        selector,
+                                        useCaseGroup
+                                    )
+                                    camera.cameraControl.setZoomRatio(2.0f)
+                                    Log.d(TAG, "Camera bound to lifecycle")
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Failed to bind camera", e)
+                                }
+                            }
+                        }, ContextCompat.getMainExecutor(ctx))
+
+                        previewView
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        } else {
+            Text("Camera permission is required to scan QR codes.")
+        }
+        Button(
+            onClick = { navController.navigate("allDevices") },
+            modifier = Modifier.padding(top = 32.dp, bottom = 32.dp)
+        ) {
+            Text("All Devices")
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            Log.d(TAG, "Disposing QrScannerScreen, unbinding camera.")
+            cameraProviderFuture.get().unbindAll()
+        }
+    }
+}
+
+@Preview
+@Composable
+fun QrScannerScreenPreview() {
+    QrScannerScreen(navController = rememberNavController())
+}
