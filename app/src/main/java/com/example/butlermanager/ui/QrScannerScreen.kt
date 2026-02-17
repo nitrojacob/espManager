@@ -41,6 +41,8 @@ import com.example.butlermanager.data.QrData
 import com.google.gson.Gson
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.util.concurrent.Executors
 
 private const val TAG = "QrScannerScreen"
@@ -129,7 +131,9 @@ fun QrScannerScreen(navController: NavController) {
                                                         imageAnalysis.clearAnalyzer()
                                                         cameraProvider.unbindAll()
                                                         Log.d(TAG, "Navigating to connectProgress screen")
-                                                        navController.navigate("connectProgress/${qrData.name}/${qrData.password}")
+                                                        val qrDataJson = Gson().toJson(qrData)
+                                                        val encodedQrData = URLEncoder.encode(qrDataJson, StandardCharsets.UTF_8.toString())
+                                                        navController.navigate("connectProgress/$encodedQrData")
                                                     } catch (e: Exception) {
                                                         Log.e(TAG, "Error parsing QR code JSON", e)
                                                     }

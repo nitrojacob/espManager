@@ -28,10 +28,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        EspressifManager.init(applicationContext)
+        val espressifManager = EspressifManager(applicationContext)
         setContent {
             ButlerManagerTheme {
-                AppNavigation()
+                AppNavigation(espressifManager)
             }
         }
     }
@@ -40,7 +40,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppNavigation() {
+fun AppNavigation(espressifManager: EspressifManager) {
     val navController = rememberNavController()
     Scaffold(
         topBar = {
@@ -73,16 +73,15 @@ fun AppNavigation() {
                 AllDevicesScreen(navController)
             }
             composable(
-                route = "connectProgress/{ssid}/{pass}",
+                route = "connectProgress/{qrDataJson}",
                 arguments = listOf(
-                    navArgument("ssid") { defaultValue = "" },
-                    navArgument("pass") { defaultValue = "" }
+                    navArgument("qrDataJson") { defaultValue = "" }
                 )
             ) { backStackEntry ->
                 ConnectProgressScreen(
                     navController = navController,
-                    ssid = backStackEntry.arguments?.getString("ssid") ?: "",
-                    pass = backStackEntry.arguments?.getString("pass") ?: ""
+                    qrDataJson = backStackEntry.arguments?.getString("qrDataJson") ?: "",
+                    espressifManager = espressifManager
                 )
             }
         }
