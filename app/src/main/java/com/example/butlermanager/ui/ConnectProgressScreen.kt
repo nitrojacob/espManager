@@ -63,6 +63,7 @@ fun rememberProvisioningSteps(): List<ProvisioningStep> {
         listOf(
             ProvisioningStep("QR Code Parsed", mutableStateOf(StepStatus.SUCCESS)),
             ProvisioningStep("Device Connection", mutableStateOf(StepStatus.PENDING)),
+            ProvisioningStep("Reading Cron Data", mutableStateOf(StepStatus.PENDING)),
         )
     }
 }
@@ -144,12 +145,19 @@ fun ConnectProgressScreen(
 
     LaunchedEffect(hasPermissions) {
         if (hasPermissions) {
-            updateStep("Device Connection", StepStatus.IN_PROGRESS)
             try {
+                updateStep("Device Connection", StepStatus.IN_PROGRESS)
                 withContext(Dispatchers.IO) {
                     espressifManager.connect(qrData)
                 }
                 updateStep("Device Connection", StepStatus.SUCCESS)
+
+                updateStep("Reading Cron Data", StepStatus.IN_PROGRESS)
+                withContext(Dispatchers.IO) {
+                    espressifManager.readCronData()
+                }
+                updateStep("Reading Cron Data", StepStatus.SUCCESS)
+
                 overallStatus = "Connected successfully!"
                 navController.navigate("timeEntry/${qrData.name ?: ""}") {
                     popUpTo("qrScanner") { inclusive = true }
@@ -161,7 +169,14 @@ fun ConnectProgressScreen(
                     else -> e.message ?: "An unknown error occurred."
                 }
                 Log.e(TAG, "Failed to connect to device: $errorMessage", e)
-                updateStep("Device Connection", StepStatus.FAILURE, errorMessage)
+
+                // Determine which step failed
+                if (steps.find { it.title == "Device Connection" }?.status?.value != StepStatus.SUCCESS) {
+                    updateStep("Device Connection", StepStatus.FAILURE, errorMessage)
+                } else {
+                    updateStep("Reading Cron Data", StepStatus.FAILURE, errorMessage)
+                }
+
                 overallStatus = "Failed to connect to device."
                 showBackButton = true
             }

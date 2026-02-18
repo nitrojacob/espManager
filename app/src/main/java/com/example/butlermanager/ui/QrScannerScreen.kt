@@ -3,6 +3,8 @@ package com.example.butlermanager.ui
 import android.Manifest
 import android.content.pm.PackageManager
 import android.util.Log
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
@@ -53,6 +55,11 @@ fun QrScannerScreen(navController: NavController) {
     Log.d(TAG, "QrScannerScreen composable started")
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+
+    BackHandler {
+        (context as? ComponentActivity)?.finish()
+    }
+
     val cameraProviderFuture = remember {
         Log.d(TAG, "Getting camera provider instance")
         ProcessCameraProvider.getInstance(context)

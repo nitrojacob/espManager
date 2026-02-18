@@ -6,17 +6,32 @@ import com.espressif.provisioning.DeviceConnectionEvent
 import com.espressif.provisioning.ESPConstants
 import com.espressif.provisioning.ESPDevice
 import com.espressif.provisioning.ESPProvisionManager
+import com.espressif.provisioning.listeners.ProvisionListener
+import com.espressif.provisioning.listeners.ResponseListener
+import com.example.butlermanager.data.AppDatabase
 import com.example.butlermanager.data.QrData
+import com.example.butlermanager.data.TimeSlot
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
+import java.lang.Exception
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 class EspressifManager(context: Context) {
     private val provisionManager: ESPProvisionManager = ESPProvisionManager.getInstance(context.applicationContext)
     private var espDevice: ESPDevice? = null
+    private val timeEntryDao = AppDatabase.getDatabase(context).timeEntryDao()
+    private var deviceName: String? = null
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    var SSID: String ?= ""
+    var Password: String?= ""
+
 
     suspend fun connect(qrData: QrData) {
         val transport = qrData.transport ?: "softap" // Default to softap
@@ -43,6 +58,7 @@ class EspressifManager(context: Context) {
 
         val device = provisionManager.createESPDevice(transportType, securityType)
         espDevice = device
+        deviceName = qrData.name
 
         device.proofOfPossession = qrData.pop ?: ""
         device.deviceName = qrData.name ?: ""
@@ -96,6 +112,162 @@ class EspressifManager(context: Context) {
             }
         }
     }
+
+    suspend fun disconnect() {
+        val device = espDevice ?: throw IllegalStateException("Device not connected")
+        val ssid = SSID ?: ""
+        val password = Password ?: ""
+
+        return suspendCancellableCoroutine { continuation ->
+            device.provision(ssid, password, object : ProvisionListener {
+                override fun createSessionFailed(e: Exception?) {
+                    Log.e(TAG, "Create session failed", e)
+                    if (continuation.isActive) {
+                        continuation.resumeWithException(e!!)
+                    }
+                }
+
+                override fun wifiConfigSent() {
+                    Log.d(TAG, "Wifi config sent")
+                }
+
+                override fun wifiConfigFailed(e: Exception?) {
+                    Log.e(TAG, "Wifi config failed", e)
+                    if (continuation.isActive) {
+                        continuation.resumeWithException(e!!)
+                    }
+                }
+
+                override fun wifiConfigApplied() {
+                    Log.d(TAG, "Wifi config applied")
+                    if (continuation.isActive) {
+                        continuation.resume(Unit)
+                    }
+                }
+
+                override fun wifiConfigApplyFailed(e: Exception?) {
+                    Log.e(TAG, "Wifi config apply failed", e)
+                    if (continuation.isActive) {
+                        continuation.resumeWithException(e!!)
+                    }
+                }
+
+                override fun provisioningFailedFromDevice(failureReason: ESPConstants.ProvisionFailureReason?) {
+                    Log.e(TAG, "Provisioning failed from device with reason: $failureReason")
+                    if (continuation.isActive) {
+                        continuation.resumeWithException(Exception("Provisioning failed from device with reason: $failureReason"))
+                    }
+                }
+
+                override fun deviceProvisioningSuccess() {
+                    Log.d(TAG, "Provisioning successful")
+                    if (continuation.isActive) {
+                        continuation.resume(Unit)
+                    }
+                }
+
+                override fun onProvisioningFailed(e: Exception?) {
+                    Log.e(TAG, "Provisioning failed", e)
+                    if (continuation.isActive) {
+                        continuation.resumeWithException(e!!)
+                    }
+                }
+            })
+        }
+    }
+
+    suspend fun readCronData() {
+        val device = espDevice ?: throw IllegalStateException("Device not connected")
+        val dn = deviceName ?: throw IllegalStateException("Device name not set")
+
+        return suspendCancellableCoroutine { continuation ->
+            device.sendDataToCustomEndPoint("cron", byteArrayOf(0, 24, 0, 0), object : ResponseListener {
+                override fun onSuccess(response: ByteArray) {
+                    Log.d(TAG, "Custom data received: ${response.contentToString()}")
+                    scope.launch {
+                        try {
+                            if (continuation.isActive) {
+                                val timeSlots = parseCronData(dn, response)
+                                timeEntryDao.updateTimeSlotsForDevice(dn, timeSlots)
+                                continuation.resume(Unit)
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to update time slots", e)
+                            if (continuation.isActive) {
+                                continuation.resumeWithException(e)
+                            }
+                        }
+                    }
+                }
+
+                override fun onFailure(e: Exception) {
+                    Log.e(TAG, "Failed to read custom data", e)
+                    if (continuation.isActive) {
+                        continuation.resumeWithException(e)
+                    }
+                }
+            })
+        }
+    }
+
+    suspend fun writeCronData() {
+        val device = espDevice ?: throw IllegalStateException("Device not connected")
+        val dn = deviceName ?: throw IllegalStateException("Device name not set")
+
+        val deviceWithTimeSlots = timeEntryDao.getDeviceWithTimeSlots(dn)
+        val timeSlots = deviceWithTimeSlots?.timeSlots?.filter { it.hour < 24 } ?: emptyList()
+        val cronData = packCronData(timeSlots)
+
+        return suspendCancellableCoroutine { continuation ->
+            device.sendDataToCustomEndPoint("cron", cronData, object : ResponseListener {
+                override fun onSuccess(response: ByteArray) {
+                    Log.d(TAG, "Successfully wrote cron data")
+                    if (continuation.isActive) {
+                        continuation.resume(Unit)
+                    }
+                }
+
+                override fun onFailure(e: Exception) {
+                    Log.e(TAG, "Failed to write cron data", e)
+                    if (continuation.isActive) {
+                        continuation.resumeWithException(e)
+                    }
+                }
+            })
+        }
+    }
+
+    private fun packCronData(timeSlots: List<TimeSlot>): ByteArray {
+        val byteList = mutableListOf<Byte>()
+        for (timeSlot in timeSlots) {
+            byteList.add(timeSlot.minute.toByte())
+            byteList.add(timeSlot.hour.toByte())
+            byteList.add(timeSlot.channel.toByte())
+            byteList.add(timeSlot.onOff.toByte())
+        }
+        return byteList.toByteArray()
+    }
+
+    private fun parseCronData(deviceName: String, data: ByteArray): List<TimeSlot> {
+        val timeSlots = mutableListOf<TimeSlot>()
+        val chunkSize = 4 // hour, minute, channel, onOff
+        data.asList().chunked(chunkSize).forEachIndexed { index, chunk ->
+            if (chunk.size == chunkSize) {
+                val timeSlot = TimeSlot(
+                    deviceOwnerName = deviceName,
+                    rowIndex = index,
+                    minute = chunk[0].toUByte().toInt(),
+                    hour = chunk[1].toUByte().toInt(),
+                    channel = chunk[2].toUByte().toInt(),
+                    onOff = chunk[3].toUByte().toInt(),
+                )
+                Log.d(TAG, "Parsed TimeSlot: $timeSlot")
+                timeSlots.add(timeSlot)
+            }
+        }
+        return timeSlots
+    }
+
 
     companion object {
         private const val TAG = "EspressifManager"

@@ -1,6 +1,6 @@
 package com.example.butlermanager.ui
 
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,7 +11,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,19 +30,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.example.butlermanager.EspressifManager
 import com.example.butlermanager.data.AppDatabase
 import com.example.butlermanager.data.Device
 import com.example.butlermanager.data.TimeSlot
 import kotlinx.coroutines.launch
 
 @Composable
-fun TimeEntryScreen(navController: NavController, name: String) {
+fun TimeEntryScreen(navController: NavController, name: String, espressifManager: EspressifManager) {
     val context = LocalContext.current
     val db = AppDatabase.getDatabase(context)
     val scope = rememberCoroutineScope()
@@ -44,16 +48,24 @@ fun TimeEntryScreen(navController: NavController, name: String) {
     var initialTimeSlots by remember { mutableStateOf(emptyList<TimeSlot>()) }
     var isFormDirty by remember { mutableStateOf(false) }
 
+
     LaunchedEffect(key1 = name) {
         scope.launch {
             val deviceWithTimeSlots = db.timeEntryDao().getDeviceWithTimeSlots(name)
             val loadedTimeSlots = if (deviceWithTimeSlots != null) {
                 val existingTimeSlots = deviceWithTimeSlots.timeSlots
-                List(10) { index ->
-                    existingTimeSlots.find { it.rowIndex == index } ?: TimeSlot(deviceOwnerName = name, rowIndex = index, channel = 0, startTime = "", stopTime = "")
+                List(15) { index ->
+                    existingTimeSlots.find { it.rowIndex == index } ?: TimeSlot(
+                        deviceOwnerName = name,
+                        rowIndex = index,
+                        channel = 0,
+                        hour = 24,
+                        minute = 0,
+                        onOff = 0
+                    )
                 }
             } else {
-                List(10) { TimeSlot(deviceOwnerName = name, rowIndex = it, channel = 0, startTime = "", stopTime = "") }
+                List(15) { TimeSlot(deviceOwnerName = name, rowIndex = it, channel = 0, hour = 24, minute = 0, onOff = 0) }
             }
             timeSlots = loadedTimeSlots
             initialTimeSlots = loadedTimeSlots
@@ -72,91 +84,116 @@ fun TimeEntryScreen(navController: NavController, name: String) {
     ) {
         Text(text = "Device: $name")
         Spacer(modifier = Modifier.height(16.dp))
-        LazyColumn(modifier = Modifier.weight(1f)) {
-            itemsIndexed(timeSlots) { index, timeSlot ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = timeSlot.channel.toString(),
-                        onValueChange = { newChannel ->
-                            val updatedTimeSlots = timeSlots.toMutableList()
-                            updatedTimeSlots[index] = timeSlot.copy(channel = newChannel.toIntOrNull() ?: 0)
-                            timeSlots = updatedTimeSlots
-                        },
-                        label = { Text("Channel") },
-                        modifier = Modifier.width(80.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    OutlinedTextField(
-                        value = timeSlot.startTime,
-                        onValueChange = { newStartTime ->
-                            val updatedTimeSlots = timeSlots.toMutableList()
-                            updatedTimeSlots[index] = timeSlot.copy(startTime = newStartTime.filter { it.isDigit() }.take(4))
-                            timeSlots = updatedTimeSlots
-                        },
-                        label = { Text("Start Time") },
-                        modifier = Modifier.weight(1f),
-                        visualTransformation = { text ->
-                            formatTime(text.text)
-                        },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    OutlinedTextField(
-                        value = timeSlot.stopTime,
-                        onValueChange = { newStopTime ->
-                            val updatedTimeSlots = timeSlots.toMutableList()
-                            updatedTimeSlots[index] = timeSlot.copy(stopTime = newStopTime.filter { it.isDigit() }.take(4))
-                            timeSlots = updatedTimeSlots
-                        },
-                        label = { Text("Stop Time") },
-                        modifier = Modifier.weight(1f),
-                        visualTransformation = { text ->
-                            formatTime(text.text)
-                        },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                    )
+        Box(modifier = Modifier.weight(1f)) {
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                itemsIndexed(timeSlots) { index, timeSlot ->
+                    if (timeSlot.hour < 24) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(
+                                value = timeSlot.hour.toString(),
+                                onValueChange = { newHour ->
+                                    val updatedTimeSlots = timeSlots.toMutableList()
+                                    val hour = newHour.filter { it.isDigit() }.take(2).toIntOrNull() ?: 0
+                                    if (hour in 0..23) {
+                                        updatedTimeSlots[index] = timeSlot.copy(hour = hour)
+                                        timeSlots = updatedTimeSlots
+                                    }
+                                },
+                                label = { Text("Hr") },
+                                modifier = Modifier.weight(1f),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            OutlinedTextField(
+                                value = timeSlot.minute.toString(),
+                                onValueChange = { newMinute ->
+                                    val updatedTimeSlots = timeSlots.toMutableList()
+                                    val minute = newMinute.filter { it.isDigit() }.take(2).toIntOrNull() ?: 0
+                                    if (minute in 0..59) {
+                                        updatedTimeSlots[index] = timeSlot.copy(minute = minute)
+                                        timeSlots = updatedTimeSlots
+                                    }
+                                },
+                                label = { Text("Min") },
+                                modifier = Modifier.weight(1f),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            OutlinedTextField(
+                                value = timeSlot.channel.toString(),
+                                onValueChange = { newChannel ->
+                                    val updatedTimeSlots = timeSlots.toMutableList()
+                                    updatedTimeSlots[index] = timeSlot.copy(channel = newChannel.filter { it.isDigit() }.take(2).toIntOrNull() ?: 0)
+                                    timeSlots = updatedTimeSlots
+                                },
+                                label = { Text("Ch") },
+                                modifier = Modifier.width(80.dp),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            OutlinedTextField(
+                                value = timeSlot.onOff.toString(),
+                                onValueChange = { newOnOff ->
+                                    val updatedTimeSlots = timeSlots.toMutableList()
+                                    updatedTimeSlots[index] = timeSlot.copy(onOff = newOnOff.filter { it.isDigit() }.take(1).toIntOrNull() ?: 0)
+                                    timeSlots = updatedTimeSlots
+                                },
+                                label = { Text("On/Off") },
+                                modifier = Modifier.width(80.dp),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            IconButton(onClick = {
+                                val updatedTimeSlots = timeSlots.toMutableList()
+                                updatedTimeSlots[index] = timeSlot.copy(hour = 24, minute = 0, channel = 0, onOff = 0)
+                                timeSlots = updatedTimeSlots
+                            }) {
+                                Icon(Icons.Filled.Delete, contentDescription = "Delete")
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
+            }
+            FloatingActionButton(
+                onClick = {
+                    val firstEmptyIndex = timeSlots.indexOfFirst { it.hour >= 24 }
+                    if (firstEmptyIndex != -1) {
+                        val updatedTimeSlots = timeSlots.toMutableList()
+                        updatedTimeSlots[firstEmptyIndex] = timeSlots[firstEmptyIndex].copy(hour = 0, minute = 0, channel = 0, onOff = 0)
+                        timeSlots = updatedTimeSlots
+                    }
+                },
+                modifier = Modifier.align(Alignment.BottomEnd)
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = "Add")
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
-        Button(
-            onClick = {
-                scope.launch {
-                    db.timeEntryDao().insertDevice(Device(name))
-                    db.timeEntryDao().insertTimeSlots(timeSlots)
-                    initialTimeSlots = timeSlots
+        Row {
+            Button(
+                onClick = {
+                    navController.navigate("advanced_config/$name")
                 }
-            },
-            enabled = isFormDirty
-        ) {
-            Text("Update")
-        }
-    }
-}
-
-fun formatTime(text: String): TransformedText {
-    val out = buildString {
-        for (i in text.indices) {
-            append(text[i])
-            if (i == 1) {
-                append(':')
+            ) {
+                Text("Advanced")
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(
+                onClick = {
+                    scope.launch {
+                        db.timeEntryDao().insertDevice(Device(name))
+                        db.timeEntryDao().insertTimeSlots(timeSlots)
+                        espressifManager.writeCronData()
+                        espressifManager.disconnect()
+                        initialTimeSlots = timeSlots
+                        navController.navigate("qrScanner")
+                    }
+                },
+                enabled = isFormDirty
+            ) {
+                Text("Update")
             }
         }
     }
-
-    val offsetMapping = object : OffsetMapping {
-        override fun originalToTransformed(offset: Int): Int {
-            if (offset <= 1) return offset
-            return (offset + 1).coerceAtMost(out.length)
-        }
-
-        override fun transformedToOriginal(offset: Int): Int {
-            if (offset <= 2) return offset
-            return (offset - 1).coerceAtMost(text.length)
-        }
-    }
-
-    return TransformedText(AnnotatedString(out), offsetMapping)
 }

@@ -18,6 +18,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.butlermanager.ui.AdvancedConfigScreen
 import com.example.butlermanager.ui.AllDevicesScreen
 import com.example.butlermanager.ui.ConnectProgressScreen
 import com.example.butlermanager.ui.QrScannerScreen
@@ -66,7 +67,18 @@ fun AppNavigation(espressifManager: EspressifManager) {
             ) { backStackEntry ->
                 TimeEntryScreen(
                     navController = navController,
-                    name = backStackEntry.arguments?.getString("name") ?: ""
+                    name = backStackEntry.arguments?.getString("name") ?: "",
+                    espressifManager = espressifManager
+                )
+            }
+            composable(
+                route = "advanced_config/{name}",
+                arguments = listOf(navArgument("name") { defaultValue = "" })
+            ) { backStackEntry ->
+                AdvancedConfigScreen(
+                    navController = navController,
+                    name = backStackEntry.arguments?.getString("name") ?: "",
+                    espressifManager = espressifManager
                 )
             }
             composable("allDevices") {

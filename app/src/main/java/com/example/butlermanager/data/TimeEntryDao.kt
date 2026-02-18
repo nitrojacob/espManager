@@ -21,4 +21,14 @@ interface TimeEntryDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTimeSlots(timeSlots: List<TimeSlot>)
+
+    @Query("DELETE FROM time_slots WHERE deviceOwnerName = :deviceName")
+    suspend fun deleteTimeSlotsForDevice(deviceName: String)
+
+    @Transaction
+    suspend fun updateTimeSlotsForDevice(deviceName: String, timeSlots: List<TimeSlot>) {
+        insertDevice(Device(deviceName))
+        deleteTimeSlotsForDevice(deviceName)
+        insertTimeSlots(timeSlots)
+    }
 }
