@@ -15,12 +15,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,6 +35,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.butlermanager.EspressifManager
 import com.example.butlermanager.data.AppDatabase
 import com.example.butlermanager.data.Device
@@ -46,7 +49,27 @@ fun TimeEntryScreen(navController: NavController, name: String, espressifManager
     val scope = rememberCoroutineScope()
     var timeSlots by remember { mutableStateOf(emptyList<TimeSlot>()) }
     var initialTimeSlots by remember { mutableStateOf(emptyList<TimeSlot>()) }
-    var isFormDirty by remember { mutableStateOf(false) }
+    var advancedSettingsChanged by remember { mutableStateOf(false) }
+    var isProvisioning by remember { mutableStateOf(false) }
+
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    LaunchedEffect(navBackStackEntry) {
+        if (navBackStackEntry?.savedStateHandle?.remove<Boolean>("advanced_settings_saved") == true) {
+            advancedSettingsChanged = true
+        }
+    }
+
+    DisposableEffect(navController) {
+        onDispose {
+            // Only disconnect if we are not navigating to the AdvancedConfigScreen
+            val destinationRoute = navController.currentBackStackEntry?.destination?.route
+            if (destinationRoute?.startsWith("advanced_config/") != true) {
+                scope.launch {
+                    espressifManager.disconnect()
+                }
+            }
+        }
+    }
 
 
     LaunchedEffect(key1 = name) {
@@ -72,9 +95,7 @@ fun TimeEntryScreen(navController: NavController, name: String, espressifManager
         }
     }
 
-    LaunchedEffect(timeSlots, initialTimeSlots) {
-        isFormDirty = timeSlots != initialTimeSlots
-    }
+    val isFormDirty = (timeSlots != initialTimeSlots) || advancedSettingsChanged
 
     Column(
         modifier = Modifier
@@ -169,12 +190,16 @@ fun TimeEntryScreen(navController: NavController, name: String, espressifManager
                 Icon(Icons.Filled.Add, contentDescription = "Add")
             }
         }
+        if (isProvisioning) {
+            CircularProgressIndicator()
+        }
         Spacer(modifier = Modifier.height(16.dp))
         Row {
             Button(
                 onClick = {
                     navController.navigate("advanced_config/$name")
-                }
+                },
+                enabled = !isProvisioning
             ) {
                 Text("Advanced")
             }
@@ -182,15 +207,18 @@ fun TimeEntryScreen(navController: NavController, name: String, espressifManager
             Button(
                 onClick = {
                     scope.launch {
+                        isProvisioning = true
                         db.timeEntryDao().insertDevice(Device(name))
                         db.timeEntryDao().insertTimeSlots(timeSlots)
                         espressifManager.writeCronData()
-                        espressifManager.disconnect()
+                        espressifManager.provision()
                         initialTimeSlots = timeSlots
+                        advancedSettingsChanged = false
+                        isProvisioning = false
                         navController.navigate("qrScanner")
                     }
                 },
-                enabled = isFormDirty
+                enabled = isFormDirty && !isProvisioning
             ) {
                 Text("Update")
             }

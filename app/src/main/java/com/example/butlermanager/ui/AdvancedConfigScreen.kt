@@ -45,8 +45,9 @@ fun AdvancedConfigScreen(navController: NavController, name: String, espressifMa
         )
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = {
-            espressifManager.SSID = ssid
-            espressifManager.Password = password
+            espressifManager.ssid = ssid
+            espressifManager.password = password
+            navController.previousBackStackEntry?.savedStateHandle?.set("advanced_settings_saved", true)
             navController.popBackStack()
         }) {
             Text("Save")

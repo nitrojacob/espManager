@@ -11,6 +11,12 @@ import com.espressif.provisioning.listeners.ResponseListener
 import com.example.butlermanager.data.AppDatabase
 import com.example.butlermanager.data.QrData
 import com.example.butlermanager.data.TimeSlot
+import java.lang.Exception
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -19,9 +25,6 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
-import java.lang.Exception
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 class EspressifManager(context: Context) {
     private val provisionManager: ESPProvisionManager = ESPProvisionManager.getInstance(context.applicationContext)
@@ -29,8 +32,8 @@ class EspressifManager(context: Context) {
     private val timeEntryDao = AppDatabase.getDatabase(context).timeEntryDao()
     private var deviceName: String? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    var SSID: String ?= ""
-    var Password: String?= ""
+    var ssid: String ?= ""
+    var password: String?= ""
 
 
     suspend fun connect(qrData: QrData) {
@@ -113,10 +116,16 @@ class EspressifManager(context: Context) {
         }
     }
 
-    suspend fun disconnect() {
+    fun disconnect() {
         val device = espDevice ?: throw IllegalStateException("Device not connected")
-        val ssid = SSID ?: ""
-        val password = Password ?: ""
+        device.disconnectDevice()
+    }
+
+
+    suspend fun provision() {
+        val device = espDevice ?: throw IllegalStateException("Device not connected")
+        val ssid = ssid ?: ""
+        val password = password ?: ""
 
         return suspendCancellableCoroutine { continuation ->
             device.provision(ssid, password, object : ProvisionListener {
@@ -181,7 +190,7 @@ class EspressifManager(context: Context) {
         val dn = deviceName ?: throw IllegalStateException("Device name not set")
 
         return suspendCancellableCoroutine { continuation ->
-            device.sendDataToCustomEndPoint("cron", byteArrayOf(0, 24, 0, 0), object : ResponseListener {
+            device.sendDataToCustomEndPoint("cronRd", byteArrayOf(0, 24, 0, 0), object : ResponseListener {
                 override fun onSuccess(response: ByteArray) {
                     Log.d(TAG, "Custom data received: ${response.contentToString()}")
                     scope.launch {
@@ -215,11 +224,11 @@ class EspressifManager(context: Context) {
         val dn = deviceName ?: throw IllegalStateException("Device name not set")
 
         val deviceWithTimeSlots = timeEntryDao.getDeviceWithTimeSlots(dn)
-        val timeSlots = deviceWithTimeSlots?.timeSlots?.filter { it.hour < 24 } ?: emptyList()
+        val timeSlots = deviceWithTimeSlots?.timeSlots ?: emptyList()
         val cronData = packCronData(timeSlots)
 
         return suspendCancellableCoroutine { continuation ->
-            device.sendDataToCustomEndPoint("cron", cronData, object : ResponseListener {
+            device.sendDataToCustomEndPoint("cronWr", cronData, object : ResponseListener {
                 override fun onSuccess(response: ByteArray) {
                     Log.d(TAG, "Successfully wrote cron data")
                     if (continuation.isActive) {
@@ -229,6 +238,33 @@ class EspressifManager(context: Context) {
 
                 override fun onFailure(e: Exception) {
                     Log.e(TAG, "Failed to write cron data", e)
+                    if (continuation.isActive) {
+                        continuation.resumeWithException(e)
+                    }
+                }
+            })
+        }
+    }
+
+    suspend fun writeTimeData() {
+        val device = espDevice ?: throw IllegalStateException("Device not connected")
+
+        val sdf = SimpleDateFormat("EEE MMM dd HH:mm:ss yyyy", Locale.ENGLISH)
+        val currentTime = sdf.format(Date())
+
+        val timeData = currentTime.toByteArray(Charsets.US_ASCII)
+
+        return suspendCancellableCoroutine { continuation ->
+            device.sendDataToCustomEndPoint("timeWr", timeData, object : ResponseListener {
+                override fun onSuccess(response: ByteArray) {
+                    Log.d(TAG, "Successfully wrote time data")
+                    if (continuation.isActive) {
+                        continuation.resume(Unit)
+                    }
+                }
+
+                override fun onFailure(e: Exception) {
+                    Log.e(TAG, "Failed to write time data", e)
                     if (continuation.isActive) {
                         continuation.resumeWithException(e)
                     }

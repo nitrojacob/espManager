@@ -1,7 +1,13 @@
 package com.example.butlermanager.ui
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.net.wifi.WifiManager
+import android.provider.Settings
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,11 +23,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
@@ -32,10 +40,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import com.example.butlermanager.EspressifManager
+import com.example.butlermanager.R
 import com.example.butlermanager.data.QrData
 import com.google.gson.Gson
 import com.google.gson.JsonSyntaxException
@@ -59,13 +69,23 @@ data class ProvisioningStep(
 
 @Composable
 fun rememberProvisioningSteps(): List<ProvisioningStep> {
-    return remember {
+    val statuses = remember {
         listOf(
-            ProvisioningStep("QR Code Parsed", mutableStateOf(StepStatus.SUCCESS)),
-            ProvisioningStep("Device Connection", mutableStateOf(StepStatus.PENDING)),
-            ProvisioningStep("Reading Cron Data", mutableStateOf(StepStatus.PENDING)),
+            mutableStateOf(StepStatus.SUCCESS),
+            mutableStateOf(StepStatus.PENDING),
+            mutableStateOf(StepStatus.PENDING),
+            mutableStateOf(StepStatus.PENDING),
+            mutableStateOf(StepStatus.PENDING),
         )
     }
+
+    return listOf(
+        ProvisioningStep(stringResource(R.string.connect_progress_step1), statuses[0]),
+        ProvisioningStep(stringResource(R.string.connect_progress_step2), statuses[1]),
+        ProvisioningStep(stringResource(R.string.connect_progress_step3), statuses[2]),
+        ProvisioningStep(stringResource(R.string.connect_progress_step4), statuses[3]),
+        ProvisioningStep(stringResource(R.string.connect_progress_step5), statuses[4]),
+    )
 }
 
 @Composable
@@ -89,9 +109,9 @@ fun ConnectProgressScreen(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Error: Invalid QR Code data.")
+            Text(stringResource(R.string.error_invalid_qr_code_data))
             Button(onClick = { navController.popBackStack() }) {
-                Text("Back to Scanner")
+                Text(stringResource(R.string.back_to_scanner))
             }
         }
         return
@@ -99,10 +119,11 @@ fun ConnectProgressScreen(
 
     Log.d(TAG, "Attempting to connect to device: ${qrData.name}")
     val context = LocalContext.current
-    var overallStatus by remember { mutableStateOf("Connecting...") }
+    var overallStatus by remember { mutableStateOf(context.getString(R.string.connecting)) }
     var showBackButton by remember { mutableStateOf(false) }
 
     val steps = rememberProvisioningSteps()
+    var showWifiDialog by remember { mutableStateOf(false) }
 
     fun updateStep(title: String, newStatus: StepStatus, error: String? = null) {
         steps.find { it.title == title }?.apply {
@@ -110,6 +131,29 @@ fun ConnectProgressScreen(
             errorText.value = error
         }
     }
+
+    val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+    var isWifiEnabled by remember { mutableStateOf(wifiManager.isWifiEnabled) }
+
+    val wifiStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (WifiManager.WIFI_STATE_CHANGED_ACTION == intent.action) {
+                val wifiState =
+                    intent.getIntExtra(WifiManager.EXTRA_WIFI_STATE, WifiManager.WIFI_STATE_UNKNOWN)
+                isWifiEnabled = wifiState == WifiManager.WIFI_STATE_ENABLED
+                Log.d(TAG, "Wifi state changed. Is enabled: $isWifiEnabled")
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        val intentFilter = IntentFilter(WifiManager.WIFI_STATE_CHANGED_ACTION)
+        context.registerReceiver(wifiStateReceiver, intentFilter)
+        onDispose {
+            context.unregisterReceiver(wifiStateReceiver)
+        }
+    }
+
 
     val permissions = arrayOf(
         Manifest.permission.ACCESS_FINE_LOCATION,
@@ -129,7 +173,7 @@ fun ConnectProgressScreen(
             hasPermissions = permissionsMap.values.all { it }
             if (!hasPermissions) {
                 Log.w(TAG, "Permissions not granted")
-                overallStatus = "Permission denied. Cannot connect to device."
+                overallStatus = context.getString(R.string.permission_denied_messsage)
                 showBackButton = true
             } else {
                 Log.d(TAG, "Permissions granted")
@@ -143,44 +187,79 @@ fun ConnectProgressScreen(
         }
     }
 
-    LaunchedEffect(hasPermissions) {
+    LaunchedEffect(hasPermissions, isWifiEnabled) {
         if (hasPermissions) {
+            updateStep(context.getString(R.string.connect_progress_step2), if (isWifiEnabled) StepStatus.SUCCESS else StepStatus.IN_PROGRESS)
+
+            if (!isWifiEnabled) {
+                overallStatus = context.getString(R.string.wifi_disabled_message)
+                showWifiDialog = true
+                return@LaunchedEffect
+            }
+            showWifiDialog = false //Dismiss dialog if wifi gets enabled
+
             try {
-                updateStep("Device Connection", StepStatus.IN_PROGRESS)
+                updateStep(context.getString(R.string.connect_progress_step3), StepStatus.IN_PROGRESS)
                 withContext(Dispatchers.IO) {
                     espressifManager.connect(qrData)
                 }
-                updateStep("Device Connection", StepStatus.SUCCESS)
+                updateStep(context.getString(R.string.connect_progress_step3), StepStatus.SUCCESS)
 
-                updateStep("Reading Cron Data", StepStatus.IN_PROGRESS)
+                updateStep(context.getString(R.string.connect_progress_step4), StepStatus.IN_PROGRESS)
+                withContext(Dispatchers.IO) {
+                    espressifManager.writeTimeData()
+                }
+                updateStep(context.getString(R.string.connect_progress_step4), StepStatus.SUCCESS)
+
+                updateStep(context.getString(R.string.connect_progress_step5), StepStatus.IN_PROGRESS)
                 withContext(Dispatchers.IO) {
                     espressifManager.readCronData()
                 }
-                updateStep("Reading Cron Data", StepStatus.SUCCESS)
+                updateStep(context.getString(R.string.connect_progress_step5), StepStatus.SUCCESS)
 
-                overallStatus = "Connected successfully!"
+                overallStatus = context.getString(R.string.connected_successfully)
                 navController.navigate("timeEntry/${qrData.name ?: ""}") {
                     popUpTo("qrScanner") { inclusive = true }
                 }
             } catch (e: Throwable) {
                 val errorMessage = when (e) {
-                    is IllegalArgumentException -> "Invalid QR code data."
-                    is NotImplementedError -> "BLE transport is not yet supported."
-                    else -> e.message ?: "An unknown error occurred."
+                    is IllegalArgumentException -> context.getString(R.string.invalid_qr_code_data)
+                    is NotImplementedError -> context.getString(R.string.ble_transport_not_supported)
+                    else -> e.message ?: context.getString(R.string.an_unknown_error_occurred)
                 }
                 Log.e(TAG, "Failed to connect to device: $errorMessage", e)
 
                 // Determine which step failed
-                if (steps.find { it.title == "Device Connection" }?.status?.value != StepStatus.SUCCESS) {
-                    updateStep("Device Connection", StepStatus.FAILURE, errorMessage)
+                if (steps.find { it.title == context.getString(R.string.connect_progress_step3) }?.status?.value != StepStatus.SUCCESS) {
+                    updateStep(context.getString(R.string.connect_progress_step3), StepStatus.FAILURE, errorMessage)
+                } else if (steps.find { it.title == context.getString(R.string.connect_progress_step4) }?.status?.value != StepStatus.SUCCESS) {
+                    updateStep(context.getString(R.string.connect_progress_step4), StepStatus.FAILURE, errorMessage)
                 } else {
-                    updateStep("Reading Cron Data", StepStatus.FAILURE, errorMessage)
+                    updateStep(context.getString(R.string.connect_progress_step5), StepStatus.FAILURE, errorMessage)
                 }
 
-                overallStatus = "Failed to connect to device."
+                overallStatus = context.getString(R.string.failed_to_connect_to_device)
                 showBackButton = true
             }
         }
+    }
+
+    if (showWifiDialog) {
+        AlertDialog(
+            onDismissRequest = { /* Prevent dismissing the dialog by clicking outside */ },
+            title = { Text(stringResource(R.string.wifi_required_title)) },
+            text = { Text(stringResource(R.string.wifi_required_message)) },
+            confirmButton = {
+                Button(onClick = { context.startActivity(Intent(Settings.ACTION_WIFI_SETTINGS)) }) {
+                    Text(stringResource(R.string.open_wifi_settings))
+                }
+            },
+            dismissButton = {
+                Button(onClick = { navController.popBackStack() }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
     }
 
     Column(
@@ -192,42 +271,44 @@ fun ConnectProgressScreen(
     ) {
         Text(text = overallStatus, modifier = Modifier.padding(bottom = 16.dp))
 
-        steps.forEach { step ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(vertical = 4.dp)
-            ) {
-                val status = step.status.value
-                val iconModifier = Modifier.size(24.dp)
+        Column {
+            steps.forEach { step ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                ) {
+                    val status = step.status.value
+                    val iconModifier = Modifier.size(24.dp)
 
-                when (status) {
-                    StepStatus.PENDING -> Icon(
-                        imageVector = Icons.Filled.AccessTime,
-                        contentDescription = "Pending",
-                        modifier = iconModifier,
-                        tint = Color.Gray
-                    )
-                    StepStatus.IN_PROGRESS -> CircularProgressIndicator(modifier = iconModifier)
-                    StepStatus.SUCCESS -> Icon(
-                        imageVector = Icons.Filled.CheckCircle,
-                        contentDescription = "Success",
-                        modifier = iconModifier,
-                        tint = Color(0xFF00C853) // A nice green
-                    )
-                    StepStatus.FAILURE -> Icon(
-                        imageVector = Icons.Filled.Warning,
-                        contentDescription = "Failure",
-                        modifier = iconModifier,
-                        tint = Color.Red
-                    )
-                }
+                    when (status) {
+                        StepStatus.PENDING -> Icon(
+                            imageVector = Icons.Filled.AccessTime,
+                            contentDescription = stringResource(R.string.pending),
+                            modifier = iconModifier,
+                            tint = Color.Gray
+                        )
+                        StepStatus.IN_PROGRESS -> CircularProgressIndicator(modifier = iconModifier)
+                        StepStatus.SUCCESS -> Icon(
+                            imageVector = Icons.Filled.CheckCircle,
+                            contentDescription = stringResource(R.string.success),
+                            modifier = iconModifier,
+                            tint = Color(0xFF00C853) // A nice green
+                        )
+                        StepStatus.FAILURE -> Icon(
+                            imageVector = Icons.Filled.Warning,
+                            contentDescription = stringResource(R.string.failure),
+                            modifier = iconModifier,
+                            tint = Color.Red
+                        )
+                    }
 
-                Spacer(modifier = Modifier.width(16.dp))
+                    Spacer(modifier = Modifier.width(16.dp))
 
-                Column {
-                    Text(text = step.title)
-                    if (step.errorText.value != null) {
-                        Text(text = step.errorText.value!!, color = Color.Red)
+                    Column {
+                        Text(text = step.title)
+                        if (step.errorText.value != null) {
+                            Text(text = step.errorText.value!!, color = Color.Red)
+                        }
                     }
                 }
             }
@@ -238,7 +319,7 @@ fun ConnectProgressScreen(
                 onClick = { navController.popBackStack() },
                 modifier = Modifier.padding(top = 16.dp)
             ) {
-                Text("Back to Scanner")
+                Text(stringResource(R.string.back_to_scanner))
             }
         }
     }

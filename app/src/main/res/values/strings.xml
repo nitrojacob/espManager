@@ -1,3 +1,25 @@
 <resources>
     <string name="app_name">ButlerManager</string>
+    <string name="connect_progress_step1">QR Code Parsed</string>
+    <string name="connect_progress_step2">Wi-Fi Check</string>
+    <string name="connect_progress_step3">Device Connection</string>
+    <string name="connect_progress_step4">Writing Time Data</string>
+    <string name="connect_progress_step5">Reading Cron Data</string>
+    <string name="error_invalid_qr_code_data">Error: Invalid QR Code data.</string>
+    <string name="back_to_scanner">Back to Scanner</string>
+    <string name="connecting">Connecting...</string>
+    <string name="permission_denied_messsage">Permission denied. Cannot connect to device.</string>
+    <string name="wifi_disabled_message">Wi-Fi is disabled. Please enable it to continue.</string>
+    <string name="connected_successfully">Connected successfully!</string>
+    <string name="invalid_qr_code_data">Invalid QR code data.</string>
+    <string name="ble_transport_not_supported">BLE transport is not yet supported.</string>
+    <string name="an_unknown_error_occurred">An unknown error occurred.</string>
+    <string name="failed_to_connect_to_device">Failed to connect to device.</string>
+    <string name="wifi_required_title">Wi-Fi Required</string>
+    <string name="wifi_required_message">Wi-Fi must be enabled to connect to the device. Please enable Wi-Fi in settings.</string>
+    <string name="open_wifi_settings">Open Wi-Fi Settings</string>
+    <string name="cancel">Cancel</string>
+    <string name="pending">Pending</string>
+    <string name="success">Success</string>
+    <string name="failure">Failure</string>
 </resources>
