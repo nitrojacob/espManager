@@ -8,7 +8,7 @@ import com.espressif.provisioning.ESPDevice
 import com.espressif.provisioning.ESPProvisionManager
 import com.espressif.provisioning.listeners.ProvisionListener
 import com.espressif.provisioning.listeners.ResponseListener
-import com.example.butlermanager.data.AppDatabase
+import com.example.butlermanager.data.TimeEntryDatabase
 import com.example.butlermanager.data.QrData
 import com.example.butlermanager.data.TimeSlot
 import java.lang.Exception
@@ -29,7 +29,7 @@ import org.greenrobot.eventbus.ThreadMode
 class EspressifManager(context: Context) {
     private val provisionManager: ESPProvisionManager = ESPProvisionManager.getInstance(context.applicationContext)
     private var espDevice: ESPDevice? = null
-    private val timeEntryDao = AppDatabase.getDatabase(context).timeEntryDao()
+    private val timeEntryDao = TimeEntryDatabase.getDatabase(context).timeEntryDao()
     private var deviceName: String? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     var ssid: String ?= ""

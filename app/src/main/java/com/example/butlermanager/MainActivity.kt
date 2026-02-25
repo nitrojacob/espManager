@@ -21,6 +21,7 @@ import androidx.navigation.navArgument
 import com.example.butlermanager.ui.AdvancedConfigScreen
 import com.example.butlermanager.ui.AllDevicesScreen
 import com.example.butlermanager.ui.ConnectProgressScreen
+import com.example.butlermanager.ui.NearbyDevicesScreen
 import com.example.butlermanager.ui.QrScannerScreen
 import com.example.butlermanager.ui.TimeEntryScreen
 import com.example.butlermanager.ui.theme.ButlerManagerTheme
@@ -60,6 +61,9 @@ fun AppNavigation(espressifManager: EspressifManager) {
         ) {
             composable("qrScanner") {
                 QrScannerScreen(navController)
+            }
+            composable("nearbyDevices") {
+                NearbyDevicesScreen(navController)
             }
             composable(
                 route = "timeEntry/{name}",

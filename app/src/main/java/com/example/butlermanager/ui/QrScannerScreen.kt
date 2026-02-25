@@ -27,6 +27,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,9 +41,11 @@ import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.example.butlermanager.data.QrData
+import com.example.butlermanager.data.QrDataDatabase
 import com.google.gson.Gson
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
+import kotlinx.coroutines.launch
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.Executors
@@ -55,6 +58,8 @@ fun QrScannerScreen(navController: NavController) {
     Log.d(TAG, "QrScannerScreen composable started")
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val db = remember { QrDataDatabase.getDatabase(context) }
+    val coroutineScope = rememberCoroutineScope()
 
     BackHandler {
         (context as? ComponentActivity)?.finish()
@@ -135,6 +140,11 @@ fun QrScannerScreen(navController: NavController) {
                                                     try {
                                                         val qrData = Gson().fromJson(rawValue, QrData::class.java)
                                                         Log.d(TAG, "Parsed QR data: $qrData")
+
+                                                        coroutineScope.launch {
+                                                            db.qrDataDao().insert(qrData)
+                                                        }
+
                                                         imageAnalysis.clearAnalyzer()
                                                         cameraProvider.unbindAll()
                                                         Log.d(TAG, "Navigating to connectProgress screen")
@@ -189,9 +199,15 @@ fun QrScannerScreen(navController: NavController) {
         }
         Button(
             onClick = { navController.navigate("allDevices") },
-            modifier = Modifier.padding(top = 32.dp, bottom = 32.dp)
+            modifier = Modifier.padding(top = 32.dp)
         ) {
             Text("All Devices")
+        }
+        Button(
+            onClick = { navController.navigate("nearbyDevices") },
+            modifier = Modifier.padding(top = 8.dp, bottom = 32.dp)
+        ) {
+            Text("Nearby Devices")
         }
     }
 

@@ -37,15 +37,15 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.butlermanager.EspressifManager
-import com.example.butlermanager.data.AppDatabase
 import com.example.butlermanager.data.Device
+import com.example.butlermanager.data.TimeEntryDatabase
 import com.example.butlermanager.data.TimeSlot
 import kotlinx.coroutines.launch
 
 @Composable
 fun TimeEntryScreen(navController: NavController, name: String, espressifManager: EspressifManager) {
     val context = LocalContext.current
-    val db = AppDatabase.getDatabase(context)
+    val db = TimeEntryDatabase.getDatabase(context)
     val scope = rememberCoroutineScope()
     var timeSlots by remember { mutableStateOf(emptyList<TimeSlot>()) }
     var initialTimeSlots by remember { mutableStateOf(emptyList<TimeSlot>()) }

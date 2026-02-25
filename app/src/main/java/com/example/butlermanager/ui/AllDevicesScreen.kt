@@ -15,17 +15,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavController
-import com.example.butlermanager.data.AppDatabase
-import com.example.butlermanager.data.Device
+import com.example.butlermanager.data.QrData
+import com.example.butlermanager.data.QrDataDatabase
 
 @Composable
 fun AllDevicesScreen(navController: NavController) {
     val context = LocalContext.current
-    var devices by remember { mutableStateOf<List<Device>>(emptyList()) }
+    var devices by remember { mutableStateOf<List<QrData>>(emptyList()) }
 
     LaunchedEffect(Unit) {
-        val database = AppDatabase.getDatabase(context)
-        devices = database.timeEntryDao().getAllDevices()
+        val database = QrDataDatabase.getDatabase(context)
+        devices = database.qrDataDao().getAllQrData()
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
