@@ -23,6 +23,9 @@ import com.example.butlermanager.EspressifManager
 fun AdvancedConfigScreen(navController: NavController, name: String, espressifManager: EspressifManager) {
     var ssid by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var timeServer by remember { mutableStateOf("iothub.local") }
+    var mqttBroker by remember { mutableStateOf("iothub.local") }
+    var otaHost by remember { mutableStateOf("iothub.local") }
 
     Column(
         modifier = Modifier
@@ -43,10 +46,31 @@ fun AdvancedConfigScreen(navController: NavController, name: String, espressifMa
             onValueChange = { password = it },
             label = { Text("Password") }
         )
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(
+            value = timeServer,
+            onValueChange = { timeServer = it },
+            label = { Text("Time Server") }
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(
+            value = mqttBroker,
+            onValueChange = { mqttBroker = it },
+            label = { Text("MQTT Broker") }
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(
+            value = otaHost,
+            onValueChange = { otaHost = it },
+            label = { Text("OTA Host") }
+        )
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = {
             espressifManager.ssid = ssid
             espressifManager.password = password
+            espressifManager.timeServer = timeServer
+            espressifManager.mqttBroker = mqttBroker
+            espressifManager.otaHost = otaHost
             navController.previousBackStackEntry?.savedStateHandle?.set("advanced_settings_saved", true)
             navController.popBackStack()
         }) {

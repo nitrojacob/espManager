@@ -10,25 +10,50 @@ import androidx.room.Transaction
 interface TimeEntryDao {
 
     @Transaction
-    @Query("SELECT * FROM devices WHERE name = :name")
-    suspend fun getDeviceWithTimeSlots(name: String): DeviceWithTimeSlots?
+    @Query("SELECT * FROM time_entry_configurations WHERE name = :name")
+    suspend fun getConfigurationWithTimeSlots(name: String): ConfigurationWithTimeSlots?
 
-    @Query("SELECT * FROM devices")
-    suspend fun getAllDevices(): List<Device>
+    @Query("SELECT * FROM time_entry_configurations")
+    suspend fun getAllConfigurations(): List<TimeEntryConfiguration>
+
+    @Query("SELECT * FROM time_slots WHERE configurationName = :configurationName")
+    suspend fun getTimeSlotsForConfiguration(configurationName: String): List<TimeSlot>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertDevice(device: Device)
+    suspend fun insertConfiguration(configuration: TimeEntryConfiguration)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTimeSlot(timeSlot: TimeSlot)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTimeSlots(timeSlots: List<TimeSlot>)
 
-    @Query("DELETE FROM time_slots WHERE deviceOwnerName = :deviceName")
-    suspend fun deleteTimeSlotsForDevice(deviceName: String)
+    @Query("DELETE FROM time_slots WHERE configurationName = :configurationName")
+    suspend fun deleteTimeSlotsForConfiguration(configurationName: String)
 
     @Transaction
-    suspend fun updateTimeSlotsForDevice(deviceName: String, timeSlots: List<TimeSlot>) {
-        insertDevice(Device(deviceName))
-        deleteTimeSlotsForDevice(deviceName)
+    suspend fun updateTimeSlotsForConfiguration(configurationName: String, timeSlots: List<TimeSlot>) {
+        insertConfiguration(TimeEntryConfiguration(configurationName))
+        deleteTimeSlotsForConfiguration(configurationName)
         insertTimeSlots(timeSlots)
+    }
+
+    @Transaction
+    suspend fun renameConfiguration(oldName: String, newName: String) {
+        val timeSlots = getTimeSlotsForConfiguration(oldName)
+        deleteTimeSlotsForConfiguration(oldName)
+        timeSlots.forEach { insertTimeSlot(it.copy(configurationName = newName)) }
+        deleteConfig(oldName)
+        insertConfiguration(TimeEntryConfiguration(newName))
+
+    }
+
+    @Query("DELETE FROM time_entry_configurations WHERE name = :name")
+    suspend fun deleteConfig(name: String)
+
+    @Transaction
+    suspend fun deleteConfigurationAndSlots(name: String) {
+        deleteTimeSlotsForConfiguration(name)
+        deleteConfig(name)
     }
 }

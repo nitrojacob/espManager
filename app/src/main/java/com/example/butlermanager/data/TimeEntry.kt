@@ -5,15 +5,15 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import androidx.room.Relation
 
-@Entity(tableName = "devices")
-data class Device(
+@Entity(tableName = "time_entry_configurations")
+data class TimeEntryConfiguration(
     @PrimaryKey val name: String
 )
 
 @Entity(tableName = "time_slots")
 data class TimeSlot(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
-    val deviceOwnerName: String,
+    val configurationName: String,
     val rowIndex: Int,
     val hour: Int,
     val minute: Int,
@@ -21,11 +21,11 @@ data class TimeSlot(
     val onOff: Int
 )
 
-data class DeviceWithTimeSlots(
-    @Embedded val device: Device,
+data class ConfigurationWithTimeSlots(
+    @Embedded val configuration: TimeEntryConfiguration,
     @Relation(
         parentColumn = "name",
-        entityColumn = "deviceOwnerName"
+        entityColumn = "configurationName"
     )
     val timeSlots: List<TimeSlot>
 )

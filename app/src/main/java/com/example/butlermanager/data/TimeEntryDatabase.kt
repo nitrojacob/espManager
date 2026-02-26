@@ -5,7 +5,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [Device::class, TimeSlot::class], version = 1, exportSchema = false)
+@Database(entities = [TimeEntryConfiguration::class, TimeSlot::class], version = 1, exportSchema = false)
 abstract class TimeEntryDatabase : RoomDatabase() {
 
     abstract fun timeEntryDao(): TimeEntryDao
@@ -20,7 +20,7 @@ abstract class TimeEntryDatabase : RoomDatabase() {
                     context.applicationContext,
                     TimeEntryDatabase::class.java,
                     "time_entry_database"
-                ).build()
+                ).fallbackToDestructiveMigration().build()
                 INSTANCE = instance
                 instance
             }

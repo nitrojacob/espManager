@@ -218,7 +218,7 @@ fun ConnectProgressScreen(
                 updateStep(context.getString(R.string.connect_progress_step5), StepStatus.SUCCESS)
 
                 overallStatus = context.getString(R.string.connected_successfully)
-                navController.navigate("timeEntry/${qrData.name ?: ""}") {
+                navController.navigate("timeEntryDevice/${qrData.name ?: ""}") {
                     popUpTo("qrScanner") { inclusive = true }
                 }
             } catch (e: Throwable) {

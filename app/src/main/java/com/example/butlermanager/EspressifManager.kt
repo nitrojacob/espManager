@@ -34,6 +34,9 @@ class EspressifManager(context: Context) {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     var ssid: String ?= ""
     var password: String?= ""
+    var timeServer: String? = "iothub.local"
+    var mqttBroker: String? = "iothub.local"
+    var otaHost: String? = "iothub.local"
 
 
     suspend fun connect(qrData: QrData) {
@@ -197,7 +200,7 @@ class EspressifManager(context: Context) {
                         try {
                             if (continuation.isActive) {
                                 val timeSlots = parseCronData(dn, response)
-                                timeEntryDao.updateTimeSlotsForDevice(dn, timeSlots)
+                                timeEntryDao.updateTimeSlotsForConfiguration(dn, timeSlots)
                                 continuation.resume(Unit)
                             }
                         } catch (e: Exception) {
@@ -223,8 +226,8 @@ class EspressifManager(context: Context) {
         val device = espDevice ?: throw IllegalStateException("Device not connected")
         val dn = deviceName ?: throw IllegalStateException("Device name not set")
 
-        val deviceWithTimeSlots = timeEntryDao.getDeviceWithTimeSlots(dn)
-        val timeSlots = deviceWithTimeSlots?.timeSlots ?: emptyList()
+        val configWithTimeSlots = timeEntryDao.getConfigurationWithTimeSlots(dn)
+        val timeSlots = configWithTimeSlots?.timeSlots ?: emptyList()
         val cronData = packCronData(timeSlots)
 
         return suspendCancellableCoroutine { continuation ->
@@ -290,7 +293,7 @@ class EspressifManager(context: Context) {
         data.asList().chunked(chunkSize).forEachIndexed { index, chunk ->
             if (chunk.size == chunkSize) {
                 val timeSlot = TimeSlot(
-                    deviceOwnerName = deviceName,
+                    configurationName = deviceName,
                     rowIndex = index,
                     minute = chunk[0].toUByte().toInt(),
                     hour = chunk[1].toUByte().toInt(),

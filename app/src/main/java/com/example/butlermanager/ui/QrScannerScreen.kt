@@ -198,10 +198,10 @@ fun QrScannerScreen(navController: NavController) {
             Text("Camera permission is required to scan QR codes.")
         }
         Button(
-            onClick = { navController.navigate("allDevices") },
+            onClick = { navController.navigate("savedConfigs") },
             modifier = Modifier.padding(top = 32.dp)
         ) {
-            Text("All Devices")
+            Text("Saved Configs")
         }
         Button(
             onClick = { navController.navigate("nearbyDevices") },

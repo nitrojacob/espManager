@@ -13,17 +13,17 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.butlermanager.ui.AdvancedConfigScreen
-import com.example.butlermanager.ui.AllDevicesScreen
 import com.example.butlermanager.ui.ConnectProgressScreen
 import com.example.butlermanager.ui.NearbyDevicesScreen
 import com.example.butlermanager.ui.QrScannerScreen
-import com.example.butlermanager.ui.TimeEntryScreen
+import com.example.butlermanager.ui.SavedConfigsScreen
+import com.example.butlermanager.ui.TimeEntryScreenOfConfig
+import com.example.butlermanager.ui.TimeEntryScreenOfDevice
 import com.example.butlermanager.ui.theme.ButlerManagerTheme
 
 class MainActivity : ComponentActivity() {
@@ -66,13 +66,26 @@ fun AppNavigation(espressifManager: EspressifManager) {
                 NearbyDevicesScreen(navController)
             }
             composable(
-                route = "timeEntry/{name}",
-                arguments = listOf(navArgument("name") { defaultValue = "" })
+                route = "timeEntryDevice/{name}",
+                arguments = listOf(
+                    navArgument("name") { defaultValue = "" },
+                )
             ) { backStackEntry ->
-                TimeEntryScreen(
+                TimeEntryScreenOfDevice(
                     navController = navController,
                     name = backStackEntry.arguments?.getString("name") ?: "",
-                    espressifManager = espressifManager
+                    espressifManager = espressifManager,
+                )
+            }
+            composable(
+                route = "timeEntryConfig/{name}",
+                arguments = listOf(
+                    navArgument("name") { defaultValue = "" },
+                )
+            ) { backStackEntry ->
+                TimeEntryScreenOfConfig(
+                    navController = navController,
+                    name = backStackEntry.arguments?.getString("name") ?: "",
                 )
             }
             composable(
@@ -85,8 +98,8 @@ fun AppNavigation(espressifManager: EspressifManager) {
                     espressifManager = espressifManager
                 )
             }
-            composable("allDevices") {
-                AllDevicesScreen(navController)
+            composable("savedConfigs") {
+                SavedConfigsScreen(navController)
             }
             composable(
                 route = "connectProgress/{qrDataJson}",
